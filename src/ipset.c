@@ -65,6 +65,7 @@ struct my_nfgenmsg {
 };
 
 
+// TODO: Adjust this buffer size to account for timeout in payload
 /* data structure size in here is fixed */
 #define BUFF_SZ 256
 
