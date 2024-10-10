@@ -63,12 +63,14 @@ void ipset_init(void)
 }
 
 int add_to_ipset(const char *setname, const union all_addr *ipaddr,
+         unsigned long ttl,
 		 int flags, int remove)
 {
-    // TODO: Implement timeout handling here
+  // TODO: Implement timeout handling here
   struct pfr_addr addr;
   struct pfioc_table io;
   struct pfr_table table;
+  struct pfrioc_tm pt;
 
   if (dev == -1) 
     {
@@ -134,6 +136,13 @@ int add_to_ipset(const char *setname, const union all_addr *ipaddr,
       my_syslog(LOG_WARNING, _("warning: DIOCR%sADDRS: %s"), ( remove ? "DEL" : "ADD" ), pfr_strerror(errno));
       return -1;
     }
+
+  pt.timeout = PFTM_INTERVAL_VAL; // Expiry interval
+  pt.seconds = ttl;
+  if (!remove && ttl > 0 && ioctl(dev, DIOCSETTIMEOUT), &pt) {
+    my_syslog(LOG_WARNING, _("warning, DIOCSETTIMEOUT: %s"), pft_strerror(errno));
+    return -1;
+  }
   
   my_syslog(LOG_INFO, _("%d addresses %s"),
             io.pfrio_nadd, ( remove ? "removed" : "added" ));
