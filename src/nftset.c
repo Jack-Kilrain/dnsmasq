@@ -22,9 +22,11 @@
 #include <nftables/libnftables.h>
 
 #include <string.h>
+#include <stdbool.h>
 #include <arpa/inet.h>
 
 static struct nft_ctx *ctx = NULL;
+static const char *cmd_add_timeout "add element %s { %s timeout %lus expires %lus }";
 static const char *cmd_add = "add element %s { %s }";
 static const char *cmd_del = "delete element %s { %s }";
 
@@ -38,9 +40,10 @@ void nftset_init()
   nft_ctx_buffer_error(ctx);
 }
 
-int add_to_nftset(const char *setname, const union all_addr *ipaddr, int flags, int remove)
+int add_to_nftset(const char *setname, const union all_addr *ipaddr, unsigned long ttl, int flags, int remove)
 {
-  const char *cmd = remove ? cmd_del : cmd_add;
+  const bool is_timeout = !remove && ttl > 0;
+  const char *cmd = remove ? cmd_del : (ttl > 0 ? cmd_add_timeout : cmd_add);
   int ret, af = (flags & F_IPV4) ? AF_INET : AF_INET6;
   size_t new_sz;
   char *new, *err, *nl;
@@ -62,19 +65,24 @@ int add_to_nftset(const char *setname, const union all_addr *ipaddr, int flags, 
   
   if (cmd_buf_sz == 0)
     new_sz = 150; /* initial allocation */
+  else if (is_timeout)
+    new_sz = snpintf(cmd_buf, cmd_buf_sz, cmd, setname, daemon->addrbuff, ttl, ttl);
   else
     new_sz = snprintf(cmd_buf, cmd_buf_sz, cmd, setname, daemon->addrbuff);
   
   if (new_sz > cmd_buf_sz)
     {
       if (!(new = whine_malloc(new_sz + 10)))
-	return 0;
+	    return 0;
 
       if (cmd_buf)
-	free(cmd_buf);
+	    free(cmd_buf);
       cmd_buf = new;
       cmd_buf_sz = new_sz + 10;
-      snprintf(cmd_buf, cmd_buf_sz, cmd, setname, daemon->addrbuff);
+      if (is_timeout)
+        snpintf(cmd_buf, cmd_buf_sz, cmd, setname, daemon->addrbuff, ttl, ttl);
+      else
+        snprintf(cmd_buf, cmd_buf_sz, cmd, setname, daemon->addrbuff);
     }
 
   ret = nft_run_cmd_from_buffer(ctx, cmd_buf);

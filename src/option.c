@@ -531,8 +531,8 @@ static struct {
   { LOPT_AUTHSOA, ARG_ONE, "<serial>[,...]", gettext_noop("Set authoritative zone information"), NULL },
   { LOPT_AUTHSFS, ARG_DUP, "<NS>[,<NS>...]", gettext_noop("Secondary authoritative nameservers for forward domains"), NULL },
   { LOPT_AUTHPEER, ARG_DUP, "<ipaddr>[,<ipaddr>...]", gettext_noop("Peers which are allowed to do zone transfer"), NULL },
-  { LOPT_IPSET, ARG_DUP, "/<domain>[/<domain>...]/<ipset>...", gettext_noop("Specify ipsets to which matching domains should be added"), NULL },
-  { LOPT_NFTSET, ARG_DUP, "/<domain>[/<domain>...]/<nftset>...", gettext_noop("Specify nftables sets to which matching domains should be added"), NULL },
+  { LOPT_IPSET, ARG_DUP, "/<domain>[/<domain>...]/<ipset>[@(T)...][,<ipset>[@(T)...]...]", gettext_noop("Specify ipsets to which matching domains should be added"), NULL },
+  { LOPT_NFTSET, ARG_DUP, "/<domain>[/<domain>...]/[(6|4)#[<family>#]<table>#<set>[@(T)...][,[(6|4)#[<family>#]<table>#<set>[@(T)...]]...]]", gettext_noop("Specify nftables sets to which matching domains should be added"), NULL },
   { LOPT_CMARK_ALST_EN, ARG_ONE, "[=<mask>]", gettext_noop("Enable filtering of DNS queries with connection-track marks."), NULL },
   { LOPT_CMARK_ALST, ARG_DUP, "<connmark>[/<mask>][,<pattern>[/<pattern>...]]", gettext_noop("Set allowed DNS patterns for a connection-track mark."), NULL },
   { LOPT_SYNTH, ARG_DUP, "<domain>,<range>,[<prefix>]", gettext_noop("Specify a domain and address range for synthesised names"), NULL },
@@ -2912,7 +2912,7 @@ static int one_opt(int option, char *arg, char *errstr, char *gen_err, int comma
            (option == LOPT_IPSET) ? &daemon->ipsets : &daemon->nftsets;
 	 int size;
 	 char *end;
-	 char **sets, **sets_pos;
+     struct ipsets_set *sets, *sets_pos;
 	 memset(ipsets, 0, sizeof(struct ipsets));
 	 unhide_metas(arg);
 	 if (arg && *arg == '/') 
@@ -2951,20 +2951,29 @@ static int one_opt(int option, char *arg, char *errstr, char *gen_err, int comma
 	   if (*end == ',')
 	       ++size;
      
-	 sets = sets_pos = opt_malloc(sizeof(char *) * size);
+	 sets = sets_pos = opt_malloc(sizeof(struct ipsets_set) * size);
 	 
 	 do {
 	   char *p;
-	   end = split(arg);
-	   *sets_pos = opt_string_alloc(arg);
+       char *start_flags = split_chr(arg, '@');
+	   sets_pos->name = opt_string_alloc(arg);
 	   /* Use '#' to delimit table and set */
 	   if (option == LOPT_NFTSET)
-	     while ((p = strchr(*sets_pos, '#')))
+	     while ((p = strchr(sets_pos->name, '#')))
 	       *p = ' ';
 	   sets_pos++;
-	   arg = end;
+	   arg = start_flags;
+	   end = split(arg);
+       int i = 1;
+       while ((p = &start_flags[i++]) != end) {
+         switch (*p) {
+           case 'T':
+             sets_pos->timeout_from_ttl = true;
+             break;
+         }
+       }
 	 } while (end);
-	 *sets_pos = 0;
+	 sets_pos->name = 0;
 	 for (ipsets = &ipsets_head; ipsets->next; ipsets = ipsets->next)
 	   ipsets->next->sets = sets;
 	 ipsets->next = *daemon_sets;

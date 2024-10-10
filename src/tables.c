@@ -65,6 +65,7 @@ void ipset_init(void)
 int add_to_ipset(const char *setname, const union all_addr *ipaddr,
 		 int flags, int remove)
 {
+    // TODO: Implement timeout handling here
   struct pfr_addr addr;
   struct pfioc_table io;
   struct pfr_table table;

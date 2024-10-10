@@ -99,11 +99,11 @@ void ipset_init(void)
   die (_("failed to create IPset control socket: %s"), NULL, EC_MISC);
 }
 
-static int new_add_to_ipset(const char *setname, const union all_addr *ipaddr, int af, int remove)
+static int new_add_to_ipset(const char *setname, const union all_addr *ipaddr, unsigned long ttl, int af, int remove)
 {
   struct nlmsghdr *nlh;
   struct my_nfgenmsg *nfg;
-  struct my_nlattr *nested[2];
+  struct my_nlattr *nested[4];
   uint8_t proto;
   int addrsz = (af == AF_INET6) ? IN6ADDRSZ : INADDRSZ;
 
@@ -138,6 +138,15 @@ static int new_add_to_ipset(const char *setname, const union all_addr *ipaddr, i
   add_attr(nlh, 
 	   (af == AF_INET ? IPSET_ATTR_IPADDR_IPV4 : IPSET_ATTR_IPADDR_IPV6) | NLA_F_NET_BYTEORDER,
 	   addrsz, ipaddr);
+  nested[2] = (struct my_nlattr *)(buffer + NL_ALIGN(nlh->nlmsg_len));
+  nlh->nlmsg_len += NL_ALIGN(sizeof(struct my_nlattr));
+  nested[2]->nla_type = NLA_F_NESTED | IPSET_ATTR_DATA;
+  nested[3] = (struct my_nlattr *)(buffer + NL_ALIGN(nlh->nlmsg_len));
+  nlh->nlmsg_len += NL_ALIGN(sizeof(struct my_nlattr));
+  nested[3]->nla_type = NLA_F_NESTED | IPSET_ATTR_TIMEOUT;
+  add_attr(nlh, IPSET_ATTR_TIMEOUT | NLA_F_NET_BYTEORDER,  sizeof(ttl), &ttl);
+  nested[3]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[3];
+  nested[2]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[2];
   nested[1]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[1];
   nested[0]->nla_len = (void *)buffer + NL_ALIGN(nlh->nlmsg_len) - (void *)nested[0];
 	
@@ -148,8 +157,9 @@ static int new_add_to_ipset(const char *setname, const union all_addr *ipaddr, i
 }
 
 
-static int old_add_to_ipset(const char *setname, const union all_addr *ipaddr, int remove)
+static int old_add_to_ipset(const char *setname, const union all_addr *ipaddr, unsigned long ttl, int remove)
 {
+  // TODO: Pack TTL into payload if not 0
   socklen_t size;
   struct ip_set_req_adt_get {
     unsigned op;
@@ -189,7 +199,7 @@ static int old_add_to_ipset(const char *setname, const union all_addr *ipaddr, i
 
 
 
-int add_to_ipset(const char *setname, const union all_addr *ipaddr, int flags, int remove)
+int add_to_ipset(const char *setname, const union all_addr *ipaddr, unsigned long ttl, int flags, int remove)
 {
   int ret = 0, af = AF_INET;
 
@@ -205,7 +215,7 @@ int add_to_ipset(const char *setname, const union all_addr *ipaddr, int flags, i
     }
   
   if (ret != -1) 
-    ret = old_kernel ? old_add_to_ipset(setname, ipaddr, remove) : new_add_to_ipset(setname, ipaddr, af, remove);
+    ret = old_kernel ? old_add_to_ipset(setname, ipaddr, ttl, remove) : new_add_to_ipset(setname, ipaddr, ttl, af, remove);
 
   if (ret == -1)
      my_syslog(LOG_ERR, _("failed to update ipset %s: %s"), setname, strerror(errno));

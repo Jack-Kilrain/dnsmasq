@@ -548,12 +548,12 @@ int extract_addresses(struct dns_header *header, size_t qlen, char *name, time_t
   unsigned long ttl = 0;
   union all_addr addr;
 #ifdef HAVE_IPSET
-  char **ipsets_cur;
+  struct ipsets_set *ipsets_cur;
 #else
   (void)ipsets; /* unused */
 #endif
 #ifdef HAVE_NFTSET
-  char **nftsets_cur;
+  struct ipsets_set *nftsets_cur;
 #else
   (void)nftsets; /* unused */
 #endif
@@ -849,13 +849,13 @@ int extract_addresses(struct dns_header *header, size_t qlen, char *name, time_t
 #ifdef HAVE_IPSET
 		  if (ipsets && (flags & (F_IPV4 | F_IPV6)))
 		    for (ipsets_cur = ipsets->sets; *ipsets_cur; ipsets_cur++)
-		      if (add_to_ipset(*ipsets_cur, &addr, flags, 0) == 0)
+		      if (add_to_ipset(ipsets_cur->name, &addr, ipsets_cur->timeout_from_ttl ? attl : 0, flags, 0) == 0)
 			log_query((flags & (F_IPV4 | F_IPV6)) | F_IPSET, ipsets->domain, &addr, *ipsets_cur, 1);
 #endif
 #ifdef HAVE_NFTSET
 		  if (nftsets && (flags & (F_IPV4 | F_IPV6)))
 		    for (nftsets_cur = nftsets->sets; *nftsets_cur; nftsets_cur++)
-		      if (add_to_nftset(*nftsets_cur, &addr, flags, 0) == 0)
+		      if (add_to_nftset(nftsets_cur->name, &addr, nftsets_cur->timeout_from_ttl ? attl : 0, flags, 0) == 0)
 			log_query((flags & (F_IPV4 | F_IPV6)) | F_IPSET, nftsets->domain, &addr, *nftsets_cur, 0);
 #endif
 		}

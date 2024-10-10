@@ -60,6 +60,8 @@
 
 /* Also needed before config.h. */
 #include <getopt.h>
+/* Flag usage */
+#include <stdbool.h>
 
 #include "config.h"
 #include "ip6addr.h"
@@ -618,8 +620,14 @@ struct rebind_domain {
   struct rebind_domain *next;
 };
 
+struct ipsets_set {
+    bool timeout_from_ttl: 1;
+    u8 _pad: 7;
+    char* name;
+};
+
 struct ipsets {
-  char **sets;
+  struct ipsets_set *sets;
   char *domain;
   struct ipsets *next;
 };
@@ -1613,13 +1621,13 @@ void ubus_event_bcast_connmark_allowlist_resolved(u32 mark, const char *pattern,
 /* ipset.c */
 #ifdef HAVE_IPSET
 void ipset_init(void);
-int add_to_ipset(const char *setname, const union all_addr *ipaddr, int flags, int remove);
+int add_to_ipset(const char *setname, const union all_addr *ipaddr, unsigned long ttl, int flags, int remove);
 #endif
 
 /* nftset.c */
 #ifdef HAVE_NFTSET
 void nftset_init(void);
-int add_to_nftset(const char *setpath, const union all_addr *ipaddr, int flags, int remove);
+int add_to_nftset(const char *setpath, const union all_addr *ipaddr, unsigned long ttl, int flags, int remove);
 #endif
 
 /* pattern.c */
